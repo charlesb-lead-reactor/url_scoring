@@ -2,184 +2,195 @@ import streamlit as st
 import pandas as pd
 import datetime
 import random
-from sklearn.preprocessing import MinMaxScaler
+import plotly.express as px
 
-def calculer_score(df, weights):
-    df_normalized = df.copy()
-    
-    # Normalisation de toutes les variables numériques
-    scaler = MinMaxScaler()
-    colonnes_a_normaliser = ['volume', 'position', 'cpc', 'jours_depuis_maj']
-    df_normalized[colonnes_a_normaliser] = scaler.fit_transform(df[colonnes_a_normaliser])
-    
-    # Inversion du score de position normalisé (plus la position est basse, meilleur est le score)
-    df_normalized['score_position'] = 1 - df_normalized['position']
-    
-    # Inversion du score de fraîcheur normalisé (plus récent est meilleur)
-    df_normalized['score_fraicheur'] = 1 - df_normalized['jours_depuis_maj']
-    
-    # Calcul du score total
-    score = (df_normalized['volume'] * weights['volume'] +
-             df_normalized['score_position'] * weights['position'] +
-             df_normalized['cpc'] * weights['cpc'] +
-             df_normalized['score_fraicheur'] * weights['fraicheur'])
-    
-    return score * 100
 
-def calculer_score2(df, weights, position_weights, freshness_weights):
-    df_normalized = df.copy()
-    
-    # Normalisation de toutes les variables numériques
-    scaler = MinMaxScaler()
-    colonnes_a_normaliser = ['volume', 'cpc', 'jours_depuis_maj']
-    df_normalized[colonnes_a_normaliser] = scaler.fit_transform(df[colonnes_a_normaliser])
-    
-    # Calcul du score de position personnalisé
-    df_normalized['score_position'] = df['position'].apply(lambda x: 
-        position_weights['top3'] if x <= 3 else
-        position_weights['top10'] if x <= 10 else
-        position_weights['top20'] if x <= 20 else
-        position_weights['above20']
-    )
-    
-    # Calcul du score de fraîcheur personnalisé
-    df_normalized['score_fraicheur'] = df['jours_depuis_maj'].apply(lambda x:
-        freshness_weights['less45'] if x <= 45 else
-        freshness_weights['less90'] if x <= 90 else
-        freshness_weights['above90']
-    )
-    
-    # Calcul du score total
-    score = (df_normalized['volume'] * weights['volume'] +
-             df_normalized['score_position'] * weights['position'] +
-             df_normalized['cpc'] * weights['cpc'] +
-             df_normalized['score_fraicheur'] * weights['fraicheur'])
-    
-    return score * 100
+def normalize_weights(weights):
+    total = sum(weights.values())
+    return {k: v / total for k, v in weights.items()}
 
-def generer_donnees_test():
-    mots_cles = [
-        'master rse à distance', 'master rse et développement durable',
-        'master rse alternance paris', 'master rse université',
-        'master rse paris', 'master rse alternance',
-        'classement master rse', 'master rse formation continue',
-        'master rse débouchés', 'master rse cnam',
-        'master 2 rse alternance', 'master 2 rse paris',
-        'école rse paris', 'top master rse france',
-        'meilleur master rse 2024', 'classement master rse europe',
-        'classement master rse mondial', 'palmarès master rse',
-        'master rse temps plein', 'master rse cours du soir',
-        'master rse en ligne', 'master rse intensif',
-        'master rse formation hybride'
+def display_normalized_weights(weights, title):
+    st.sidebar.markdown(f"<p style='font-size:12px; margin-bottom:0;'><u>Normalized <strong>{title}</strong> weights</u>:</p>", unsafe_allow_html=True)
+    for k, v in weights.items():
+        st.sidebar.markdown(f"<p style='font-size:11px; margin:0;'>{k}: {v:.2f}</p>", unsafe_allow_html=True)
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)  # Ajoute un peu d'espace après chaque groupe
+
+def get_position_score(position, weights):
+    if position <= 3:
+        return weights['top3']
+    elif position <= 10:
+        return weights['top10']
+    elif position <= 20:
+        return weights['top20']
+    else:
+        return weights['above20']
+
+def get_freshness_score(days, weights):
+    if days <= 45:
+        return weights['less45']
+    elif days <= 90:
+        return weights['less90']
+    else:
+        return weights['above90']
+
+def calculate_score(row, weights, df_min, df_max):
+    normalized_values = {
+        'volume': (row['volume'] - df_min['volume']) / (df_max['volume'] - df_min['volume']),
+        'position': 1 - (row['position'] - df_min['position']) / (df_max['position'] - df_min['position']),
+        'cpc': (row['cpc'] - df_min['cpc']) / (df_max['cpc'] - df_min['cpc']),
+        'freshness': 1 - (row['days_since_update'] - df_min['days_since_update']) / (df_max['days_since_update'] - df_min['days_since_update'])
+    }
+    
+    score = sum(normalized_values[key] * weights[key] for key in weights)
+    return round(score * 100, 1)
+
+def calculate_score2(row, weights, position_weights, freshness_weights, df_min, df_max):
+    normalized_values = {
+        'volume': (row['volume'] - df_min['volume']) / (df_max['volume'] - df_min['volume']),
+        'cpc': (row['cpc'] - df_min['cpc']) / (df_max['cpc'] - df_min['cpc']),
+    }
+    
+    position_score = get_position_score(row['position'], position_weights)
+    freshness_score = get_freshness_score(row['days_since_update'], freshness_weights)
+    
+    score = (normalized_values['volume'] * weights['volume'] +
+             position_score * weights['position'] +
+             normalized_values['cpc'] * weights['cpc'] +
+             freshness_score * weights['freshness'])
+    
+    return round(score * 100, 1)
+
+def generate_test_data():
+    keywords = [
+        'online csr master', 'csr and sustainable development master',
+        'csr master internship paris', 'csr master university',
+        'csr master paris', 'csr master internship',
+        'csr master ranking', 'csr master continuing education',
+        'csr master job prospects', 'csr master cnam',
+        'csr master 2 internship', 'csr master 2 paris',
+        'csr school paris', 'top csr master france',
+        'best csr master 2024', 'csr master ranking europe',
+        'csr master global ranking', 'csr master awards',
+        'full-time csr master', 'evening csr master',
+        'online csr master', 'intensive csr master',
+        'hybrid csr master'
     ]
     
     data = {
-        'url': ['https://example.com/' + '-'.join(mc.split()) for mc in mots_cles],
-        'mot_cle': mots_cles,
-        'volume': [random.randint(100, 5000) for _ in range(len(mots_cles))],
-        'position': [random.randint(1, 50) for _ in range(len(mots_cles))],
-        'cpc': [round(random.uniform(0.5, 10.0), 2) for _ in range(len(mots_cles))],
-        'date_maj': [
+        'url': ['https://example.com/' + '-'.join(kw.split()) for kw in keywords],
+        'keyword': keywords,
+        'volume': [random.randint(100, 5000) for _ in range(len(keywords))],
+        'position': [random.randint(1, 50) for _ in range(len(keywords))],
+        'cpc': [round(random.uniform(0.5, 10.0), 2) for _ in range(len(keywords))],
+        'last_update_date': [
             datetime.datetime.now() - datetime.timedelta(days=random.randint(1, 150))
-            for _ in range(len(mots_cles))
+            for _ in range(len(keywords))
         ]
     }
     
     return pd.DataFrame(data)
 
-# Titre de l'application
-st.title("Scoring SEO des contenus")
+def plot_horizontal_bar(df):
+    fig = px.bar(df.sort_values('score2', ascending=True).tail(20), 
+                 y='keyword', x='score2', 
+                 orientation='h',
+                 color='score2',
+                 color_continuous_scale='RdYlGn',
+                 title='Top 20 Keywords by Score2')
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig)
 
-st.sidebar.header("Ajustement des poids")
+def plot_scatter(df):
+    fig = px.scatter(df, x='score2', y='volume', 
+                     color='position', size='cpc',
+                     hover_name='keyword',
+                     color_continuous_scale='Viridis',
+                     title='Score2 vs Volume, Position, and CPC')
+    st.plotly_chart(fig)
 
-# Poids pour les scores
-weight_volume = st.sidebar.slider("Poids du volume", 0.0, 1.0, 0.25, 0.05)
-weight_position = st.sidebar.slider("Poids de la position", 0.0, 1.0, 0.40, 0.05)
-weight_cpc = st.sidebar.slider("Poids du CPC", 0.0, 1.0, 0.20, 0.05)
-weight_fraicheur = st.sidebar.slider("Poids de la fraîcheur", 0.0, 1.0, 0.15, 0.05)
+def read_markdown_file(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
 
-# Normalisation des poids
-total_weight = weight_volume + weight_position + weight_cpc + weight_fraicheur
-weight_volume /= total_weight
-weight_position /= total_weight
-weight_cpc /= total_weight
-weight_fraicheur /= total_weight
 
-st.sidebar.write("Poids normalisés :")
-st.sidebar.write(f"Volume : {weight_volume:.2f}")
-st.sidebar.write(f"Position : {weight_position:.2f}")
-st.sidebar.write(f"CPC : {weight_cpc:.2f}")
-st.sidebar.write(f"Fraîcheur : {weight_fraicheur:.2f}")
+st.set_page_config(layout="wide", page_title="SEO Content Scoring - Python Script")
+# Application title
+st.markdown(read_markdown_file('src/templates/navbar.md'), unsafe_allow_html=True)
+st.title("SEO Content Scoring (light version)")
 
-st.sidebar.header("Poids pour Score 2")
+st.sidebar.header("Weight Adjustment (both score)")
+# Main weights
+main_weights = normalize_weights({
+    'volume': st.sidebar.slider("Volume Weight", 0.0, 1.0, 0.25, 0.05),
+    'position': st.sidebar.slider("Position Weight", 0.0, 1.0, 0.40, 0.05),
+    'cpc': st.sidebar.slider("CPC Weight", 0.0, 1.0, 0.20, 0.05),
+    'freshness': st.sidebar.slider("Freshness Weight", 0.0, 1.0, 0.15, 0.05)
+})
+display_normalized_weights(main_weights, "main")
 
-# Poids pour les positions
-st.sidebar.subheader("Poids des positions")
-weight_top3 = st.sidebar.slider("Top 3", 0.0, 1.0, 0.1, 0.05)
-weight_top10 = st.sidebar.slider("Top 4-10", 0.0, 1.0, 1.0, 0.05)
-weight_top20 = st.sidebar.slider("Top 11-20", 0.0, 1.0, 0.8, 0.05)
-weight_above20 = st.sidebar.slider("Au-delà du top 20", 0.0, 1.0, 0.5, 0.05)
+st.sidebar.header("Weight Adjustment (only for score2)")
+# Position weights
+st.sidebar.subheader("Weights for position")
+position_weights = normalize_weights({
+    'top3': st.sidebar.slider("Top 3", 0.0, 1.0, 0.1, 0.05),
+    'top10': st.sidebar.slider("Top 4-10", 0.0, 1.0, 1.0, 0.05),
+    'top20': st.sidebar.slider("Top 11-20", 0.0, 1.0, 0.8, 0.05),
+    'above20': st.sidebar.slider("Beyond top 20", 0.0, 1.0, 0.5, 0.05)
+})
+display_normalized_weights(position_weights, "position")
 
-# Poids pour la fraîcheur
-st.sidebar.subheader("Poids de la fraîcheur")
-weight_less45 = st.sidebar.slider("Moins de 45 jours", 0.0, 1.0, 0.1, 0.05)
-weight_less90 = st.sidebar.slider("Entre 45 et 90 jours", 0.0, 1.0, 0.8, 0.05)
-weight_above90 = st.sidebar.slider("Plus de 90 jours", 0.0, 1.0, 1.0, 0.05)
+# Freshness weights
+st.sidebar.subheader("Weights for freshness")
+freshness_weights = normalize_weights({
+    'less45': st.sidebar.slider("Less than 45 days", 0.0, 1.0, 0.1, 0.05),
+    'less90': st.sidebar.slider("Between 45 and 90 days", 0.0, 1.0, 0.8, 0.05),
+    'above90': st.sidebar.slider("More than 90 days", 0.0, 1.0, 1.0, 0.05)
+})
+display_normalized_weights(freshness_weights, "freshness")
 
-# Option pour utiliser des données de test ou uploader un fichier
-option = st.radio("Choisissez une option :", ("Utiliser des données de test", "Uploader un fichier CSV"))
+# Option to use test data or upload a file
+st.markdown("---")
+option = st.radio("Choose an option:", ("Use test data", "Upload a CSV file"))
 
-if option == "Utiliser des données de test":
-    df = generer_donnees_test()
+if option == "Use test data":
+    df = generate_test_data()
 else:
-    uploaded_file = st.file_uploader("Choisissez votre fichier CSV", type="csv")
+    uploaded_file = st.file_uploader("Choose your CSV file", type="csv")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
     else:
-        st.warning("Veuillez uploader un fichier CSV.")
+        st.warning("Please upload a CSV file.")
         st.stop()
 
-# Traitement des données
+# Data processing
 if df is not None:
-    if df['date_maj'].dtype != 'datetime64[ns]':
-        df['date_maj'] = pd.to_datetime(df['date_maj'])
-    df['jours_depuis_maj'] = (datetime.datetime.now() - df['date_maj']).dt.days
+    if df['last_update_date'].dtype != 'datetime64[ns]':
+        df['last_update_date'] = pd.to_datetime(df['last_update_date'])
+    df['days_since_update'] = (datetime.datetime.now() - df['last_update_date']).dt.days
 
-    weights = {
-        'volume': weight_volume,
-        'position': weight_position,
-        'cpc': weight_cpc,
-        'fraicheur': weight_fraicheur
-    }
+    df_min = df[['volume', 'position', 'cpc', 'days_since_update']].min()
+    df_max = df[['volume', 'position', 'cpc', 'days_since_update']].max()
 
-    position_weights = {
-        'top3': weight_top3,
-        'top10': weight_top10,
-        'top20': weight_top20,
-        'above20': weight_above20
-    }
-
-    freshness_weights = {
-        'less45': weight_less45,
-        'less90': weight_less90,
-        'above90': weight_above90
-    }
-
-    df['score'] = calculer_score(df, weights)
-    df['score2'] = calculer_score2(df, weights, position_weights, freshness_weights)
+    df['score'] = df.apply(lambda row: calculate_score(row, main_weights, df_min, df_max), axis=1)
+    df['score2'] = df.apply(lambda row: calculate_score2(row, main_weights, position_weights, freshness_weights, df_min, df_max), axis=1)
     
     df_sorted = df.sort_values('score2', ascending=False)
     
     st.dataframe(df_sorted)
-    
-    st.subheader("Comparaison des scores")
-    chart_data = df_sorted[['url', 'score', 'score2']].set_index('url')
-    st.bar_chart(chart_data)
+
+    plot_horizontal_bar(df_sorted)
+    plot_scatter(df_sorted)
     
     csv = df_sorted.to_csv(index=False)
     st.download_button(
-        label="Télécharger les résultats en CSV",
+        label="Download results as CSV",
         data=csv,
-        file_name="resultats_scoring_seo.csv",
+        file_name="seo_scoring_results.csv",
         mime="text/csv",
     )
+
+st.markdown(read_markdown_file('src/templates/content.md'), unsafe_allow_html=True)
+st.markdown("---")
+st.markdown(read_markdown_file('src/templates/cta.md'), unsafe_allow_html=True)
+st.markdown("---")
+st.markdown(read_markdown_file('src/templates/footer.md'), unsafe_allow_html=True)
