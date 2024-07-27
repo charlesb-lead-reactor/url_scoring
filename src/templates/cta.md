@@ -42,20 +42,20 @@
             <h3>Need a custom version?</h3>
             <p>Discover how our expertise can optimize your SEO strategy.</p>
         </div>
-        <a href="https://lead-reactor.io/about/contact" class="cta-button">Contact us for a demo</a>
+        <a href="https://lead-reactor.io/about/contact?utm_source=streamlit&utm_campaign=url-scoring" class="cta-button">Contact us for a demo</a>
     </div>
     <div class="column">
         <div class="content">
             <h3>Besoin d'une version personnalisée ?</h3>
             <p>Découvrez comment notre expertise peut optimiser votre stratégie SEO.</p>
         </div>
-        <a href="https://lead-reactor.io/about/contact" class="cta-button">Contactez-nous pour une démo</a>
+        <a href="https://lead-reactor.io/about/contact?utm_source=streamlit&utm_campaign=url-scoring" class="cta-button">Contactez-nous pour une démo</a>
     </div>
     <div class="column">
         <div class="content">
             <h3>¿Necesita una versión personalizada?</h3>
             <p>Descubra cómo nuestra experiencia puede optimizar su estrategia de SEO.</p>
         </div>
-        <a href="https://lead-reactor.io/about/contact" class="cta-button">Contáctenos para una demo</a>
+        <a href="https://lead-reactor.io/about/contact?utm_source=streamlit&utm_campaign=url-scoring" class="cta-button">Contáctenos para una demo</a>
     </div>
 </div>
